@@ -14,8 +14,6 @@ app.set('views', __dirname + '/views');
 
 // To store Product List
 let products = [];
-let productRecommendations = {}; 
-
 
 if(products.length == 0){    // Checks if products are alreay imported, if not imports 
 
@@ -27,7 +25,6 @@ if(products.length == 0){    // Checks if products are alreay imported, if not i
       return res.status(500).json({ error: 'Error reading the directory' });
     }
 
-          console.log(files);
     // Filter files with the .csv extension
     const csvFiles = files.filter((file) => path.extname(file).toLowerCase() === '.csv');
 
@@ -41,10 +38,10 @@ if(products.length == 0){    // Checks if products are alreay imported, if not i
           // Assuming CSV columns: name, description, category, price, SKU, stock
           row.updatedTimeStamp = new Date().toISOString();
           row.SKU = 'SKU_'+row.title.toLowerCase().replace(/ +/g, "");
-          const { title, explanation, category, price, diet, stock, image_link, SKU, updatedTimeStamp } = row;
-          products.push({ title, explanation, category, price, stock, image_link, SKU, updatedTimeStamp });
+          row.groupname = "";
+          const { title, explanation, category, price, diet, stock, image_link, SKU, updatedTimeStamp, groupname } = row;
+          products.push({ title, explanation, category, price, stock, image_link, SKU, updatedTimeStamp, groupname });
           row.timestamp = new Date().toISOString();
-          //products.push(row);
         })
         .on('end', () => {
           console.log(products);
@@ -80,9 +77,10 @@ app.post('/import', (req, res) => {
         .on('data', (row) => {
           // Assuming CSV columns: name, description, category, price, SKU, stockconst { title, explanation, category, price, diet, stock } = row;
           row.updatedTimeStamp = new Date().toISOString();
+          row.groupname = "";
           row.SKU = 'SKU_'+row.title.toLowerCase().replace(/ +/g, "");
-          const { title, explanation, category, price, diet, stock, image_link, SKU, updatedTimeStamp } = row;
-          products.push({ title, explanation, category, price, stock, image_link, SKU, updatedTimeStamp });
+          const { title, explanation, category, price, diet, stock, image_link, SKU, updatedTimeStamp, groupname } = row;
+          products.push({ title, explanation, category, price, stock, image_link, SKU, updatedTimeStamp, groupname });
           row.timestamp = new Date().toISOString();
           products.push(row);
         })
@@ -103,7 +101,7 @@ app.post('/import', (req, res) => {
 app.get('/products', (req, res) => {
 
   // Implement filtering and ordering logic here based on query parameters
-  const { sortBy, sortOrder, filterByName, filterByStock , filterBySKU, minPrice, maxPrice } = req.query;
+  const { sortBy, sortOrder, filterByName, filterByStock ,  minPrice, maxPrice } = req.query;
 
   //Flitering Logic By Title, Stock, Price
   let filteredProducts = [...products];
@@ -115,6 +113,7 @@ app.get('/products', (req, res) => {
   if(filterByStock){
        filteredProducts = filteredProducts.filter(product => product.stock.toLowerCase().replace(/ +/g, "").includes(filterByStock.toLowerCase().replace(/ +/g, "")));
   }
+
   if(minPrice && maxPrice){
       filteredProducts = products.filter(product => {
         const productPrice = parseFloat(product.price);
@@ -124,37 +123,31 @@ app.get('/products', (req, res) => {
 
   // sorting 
   if (sortBy && sortOrder) {
-
     filteredProducts.sort((a, b) => {
       return sortOrder === 'asc' ? a[sortBy] - b[sortBy] : b[sortBy] - a[sortBy];
     });
-
   }
- 
-  res.render('products', { filteredProducts: filteredProducts, title:'Product List' });
-  //res.status(200).json(filteredProducts);
+   res.render('products', { filteredProducts: filteredProducts, title:'Product List' });
 });
 
 // Sell products 
 
 app.post('/sell', (req, res) => {
-  res.send(req);/*
+  
   const { order } = req.body;
   // logic to update stock levels based on the order id
 
-  for (const [SKU, quantity] of Object.entries(order)) {
-    const product = products.find((p) => p.SKU === SKU);
+  for (const [id, quantity] of Object.entries(order)) {
+    const product = products.find((p) => p.id === id);
 
     if (product) {
       //product.quantity -= quantity; // Logic to update 'quantity' 
       product.stock = 'Out Of Stock'; //Since quantity is not given, I am updating stock to 'out of stock'
       product.groupname = 'FBT_'+ new Date().getTime(); // Assigns a unique Group name every time ordered together
       product.updatedTimeStamp = new Date().toISOString();
-      updateRecommendations(product.SKU, );
     }
   }
   res.render('products', { filteredProducts: products , title:'Updated recommendations List' ,message: 'Products Updated successfully'});
-  *///res.status(200).json({ message: 'Products sold successfully', products });
 });
 
 // Product Recommendations 
@@ -168,28 +161,15 @@ app.get('/recommendations/:SKU', (req, res) => {
   if (!productExists) {
     return res.status(404).json({ error: 'Product not found' });
   }
-
-  // Logic to provide product recommendations based on Category using SKU
-  const recommendedProducts = productRecommendations[SKU] || [];
-
-  //const recommendedProducts = products.filter((p) => p.category === products.find((p) => p.SKU == SKU).category && p.SKU !== SKU   && p.SKU != SKU);
-
-  //res.status(200).json(recommendedProducts);
+ let recommendedProducts = [];
+  // Logic to provide product recommendations based on groupname using SKU, if groupname is not assigned yet uses category to filter
+  recommendedProducts = products.filter((p) =>p.groupname!= "" && p.groupname === products.find((p) => p.SKU == SKU).groupname && p.SKU !== SKU   && p.SKU != SKU);
+  if(recommendedProducts.length == 0){
+    recommendedProducts = products.filter((p) =>p.category === products.find((p) => p.SKU == SKU).category && p.SKU !== SKU   && p.SKU != SKU);
+  }
+    
   res.render('products', { filteredProducts: recommendedProducts , title:'Product recommendations List' });
 });
-
-function updateRecommendations(sku) {
-  // Check if the SKU is already in the recommendations data
-  if (!productRecommendations[sku]) {
-    productRecommendations[sku] = [];
-  }
-
-  // logic for determining frequently bought products
-  const randomProducts = products.filter((p) => p.category === products.find((p) => p.sku == sku).category && p.sku !== sku); // Just for demonstration, replace with your logic
-  randomProducts.map((product) => product.SKU);
-
-  productRecommendations[sku] = [...productRecommendations[sku], ...randomProducts];
-}
 
 app.listen(port, () => {
   console.log(`Product microservice is running on http://localhost:${port}`);
