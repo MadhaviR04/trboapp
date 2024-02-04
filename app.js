@@ -1,7 +1,7 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import csvParser from 'csv-parser';
-import fs from 'fs';
+import fs from 'fs/promises';
 import { dirname } from 'path';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,94 +11,42 @@ app.set('view engine', 'ejs'); // Set EJS as the view engine
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 app.set('views', __dirname + '/views');
-
+import {parse, stringify} from 'flatted';
+app.use(bodyParser.json()); // for parsing application/json
+app.use(bodyParser.urlencoded({ extended: true }));
 // To store Product List
 let products = [];
 
-if(products.length == 0){    // Checks if products are alreay imported, if not imports 
 
-  const folderPath = '/trboapp/'; 
-  //Logic to automatically import any file matching the .csv extension
-  
-  fs.readdir(folderPath, (err, files) => {
-    if (err) {
-      return res.status(500).json({ error: 'Error reading the directory' });
-    }
-
-    // Filter files with the .csv extension
-    const csvFiles = files.filter((file) => path.extname(file).toLowerCase() === '.csv');
-
-    // Import each CSV file
-    csvFiles.forEach((file) => {
-      const filePath = path.join(folderPath, file);
-
-      fs.createReadStream(filePath)
-        .pipe(csvParser())
-        .on('data', (row) => {
-          // Assuming CSV columns: name, description, category, price, SKU, stock
-          row.updatedTimeStamp = new Date().toISOString();
-          row.SKU = 'SKU_'+row.title.toLowerCase().replace(/ +/g, "");
-          row.groupname = "";
-          const { title, explanation, category, price, diet, stock, image_link, SKU, updatedTimeStamp, groupname } = row;
-          products.push({ title, explanation, category, price, stock, image_link, SKU, updatedTimeStamp, groupname });
-          row.timestamp = new Date().toISOString();
-        })
-        .on('end', () => {
-          console.log(products);
-        })
-        .on('error', (error) => {
-          console.error(`Error during CSV parsing for ${file}:`, error.message);
-        });
-    });
-});
-}
 
 //Import Product List API
 
-app.post('/import', (req, res) => {
-
-  const folderPath = '/'; 
-  //Logic to automatically import any file matching the .csv extension
-  
-  fs.readdir(folderPath, (err, files) => {
-    if (err) {
-      return res.status(500).json({ error: 'Error reading the directory' });
-    }
-
-    // Filter files with the .csv extension
-    const csvFiles = files.filter((file) => path.extname(file).toLowerCase() === '.csv');
-
-    // Import each CSV file
-    csvFiles.forEach((file) => {
-      const filePath = path.join(folderPath, file);
-
-      fs.createReadStream(filePath)
-        .pipe(csvParser())
-        .on('data', (row) => {
-          // Assuming CSV columns: name, description, category, price, SKU, stockconst { title, explanation, category, price, diet, stock } = row;
-          row.updatedTimeStamp = new Date().toISOString();
-          row.groupname = "";
-          row.SKU = 'SKU_'+row.title.toLowerCase().replace(/ +/g, "");
-          const { title, explanation, category, price, diet, stock, image_link, SKU, updatedTimeStamp, groupname } = row;
-          products.push({ title, explanation, category, price, stock, image_link, SKU, updatedTimeStamp, groupname });
-          row.timestamp = new Date().toISOString();
-          products.push(row);
-        })
-        .on('end', () => {
-          console.log(`Product feed imported successfully`);
-        })
-        .on('error', (error) => {
-          console.error(`Error during CSV parsing`, error.message);
-        });
-    });
-  return res.status(200).json({products, message: 'Product feeds imported successfully' });
-  });
+app.post('/import', async (req, res) => {
+  const folderPath = req.body.filePath;
+  if(!folderPath){
+    res.status(500).json({ error: 'Invalid folderPath' });
+  }
+  try {
+    await importFunction(folderPath);
+    res.status(200).json({ products, message: 'Product feeds imported successfully' });
+  } catch (error) {
+    console.error('Error during import:', error);
+    res.status(500).json({ error: 'Error during import' });
+  }
 });
 
 
 // List products 
 
-app.get('/products', (req, res) => {
+app.get('/products', async(req, res) => {
+
+  if(products.length == 0){    // Checks if products are alreay imported, if not imports 
+      try {
+      await importFunction('/trboapp');
+    } catch (error) {
+      console.error('Error during import:', error);
+    }
+  }
 
   // Implement filtering and ordering logic here based on query parameters
   const { sortBy, sortOrder, filterByName, filterByStock ,  minPrice, maxPrice } = req.query;
@@ -132,8 +80,14 @@ app.get('/products', (req, res) => {
 
 // Sell products 
 
-app.post('/sell', (req, res) => {
-  
+app.post('/sell', async(req, res) => {
+  if(products.length == 0){    // Checks if products are alreay imported, if not imports 
+      try {
+      await importFunction('/trboapp');
+    } catch (error) {
+      console.error('Error during import:', error);
+    }
+  }
   const { order } = req.body;
   // logic to update stock levels based on the order id
 
@@ -147,13 +101,21 @@ app.post('/sell', (req, res) => {
       product.updatedTimeStamp = new Date().toISOString();
     }
   }
-  res.render('products', { filteredProducts: products , title:'Updated recommendations List' ,message: 'Products Updated successfully'});
+  res.send(products);
+  //res.render('products', { filteredProducts: products , title:'Updated recommendations List' ,message: 'Products Updated successfully'});
 });
 
 // Product Recommendations 
 
-app.get('/recommendations/:SKU', (req, res) => {
-  
+app.get('/recommendations/:SKU', async(req, res) => {
+  if(products.length == 0){    // Checks if products are alreay imported, if not imports 
+      try {
+      await importFunction('/trboapp');
+    } catch (error) {
+      console.error('Error during import:', error);
+    }
+  }
+
   const { SKU } = req.params;
 
   const productExists = products.some((p) => p.SKU === SKU);
@@ -171,6 +133,51 @@ app.get('/recommendations/:SKU', (req, res) => {
   res.render('products', { filteredProducts: recommendedProducts , title:'Product recommendations List' });
 });
 
+
+async function importFunction(filepath) {
+  const folderPath = filepath;
+
+  try {
+    const files = await fs.readdir(folderPath);
+     // Filter files with the .csv extension
+    const csvFiles = files.filter((file) => path.extname(file).toLowerCase() === '.csv');
+     // Import each CSV file
+    await Promise.all(
+      csvFiles.map(async (file) => {
+        const filePath = path.join(folderPath, file);
+        const fileData = await fs.readFile(filePath, 'utf8');
+
+        const parser = csvParser();
+
+        return new Promise((resolve, reject) => {
+          parser.on('data', (row) => {
+            row.updatedTimeStamp = new Date().toISOString();
+            row.SKU = 'SKU_' + row.title.toLowerCase().replace(/ +/g, '');
+            row.groupname = '';
+            const { id, title, explanation, category, price, diet, stock, image_link, SKU, updatedTimeStamp, groupname } = row;
+            products.push({ id, title, explanation, category, price, stock, image_link, SKU, updatedTimeStamp, groupname });
+            row.timestamp = new Date().toISOString();
+          });
+
+          parser.on('end', () => {
+            resolve();
+          });
+
+          parser.on('error', (error) => {
+            reject(error);
+          });
+
+          parser.write(fileData);
+          parser.end();
+        });
+      })
+    );
+  } catch (error) {
+    console.error('Error reading the directory:', error);
+    throw new Error('Error reading the directory');
+  }
+}
+
 app.listen(port, () => {
-  console.log(`Product microservice is running on http://localhost:${port}`);
+  console.log(`Server is running on http://localhost:${port}`);
 });
