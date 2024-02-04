@@ -4,9 +4,9 @@ Url:  https://github.com/MadhaviR04/trboapp/tree/dev
 This document explains the implementation below,
 1.	Import API:
 •	Created a post method, where the CSV files are loaded from directory. Using file system module and csv-Parser loaded into the variable.
-•	Loaded Title, Description, Category, Price, SKU, Stock, updatedTimeStamp into variable ‘product’.
+•	Loaded Id, Title, Description, Category, Price, SKU, Stock, updatedTimeStamp into variable ‘product’.
 •	created Timestamp, groupname, SKU variables while loading to perform other api functionalities  
-Curl URL To call the API:
+Curl URL To call the API: curl -X POST -H "Content-Type: application/json" -d "{\"filePath\": \"<filePath>\"}" "http://localhost:3000/import"
 
 2.	Product List with Sort and Filter functionality:
 Created a get method, to list the products from CSV. To Sort and Filter parameters passed the arguments with URL as Params.
