@@ -101,9 +101,8 @@ app.post('/sell', async(req, res) => {
       product.updatedTimeStamp = new Date().toISOString();
     }
   }
-  res.send(products);
-  //res.render('products', { filteredProducts: products , title:'Updated recommendations List' ,message: 'Products Updated successfully'});
-});
+    res.status(200).json({ products, message: 'Product recommendations updated successfully' });
+  });
 
 // Product Recommendations 
 
@@ -125,9 +124,9 @@ app.get('/recommendations/:SKU', async(req, res) => {
   }
  let recommendedProducts = [];
   // Logic to provide product recommendations based on groupname using SKU, if groupname is not assigned yet uses category to filter
-  recommendedProducts = products.filter((p) =>p.groupname!= "" && p.groupname === products.find((p) => p.SKU == SKU).groupname && p.SKU !== SKU   && p.SKU != SKU);
+  recommendedProducts = products.filter((p) =>p.groupname!= "" && p.groupname === products.find((p) => p.SKU == SKU).groupname);
   if(recommendedProducts.length == 0){
-    recommendedProducts = products.filter((p) =>p.category === products.find((p) => p.SKU == SKU).category && p.SKU !== SKU   && p.SKU != SKU);
+    recommendedProducts = products.filter((p) =>p.category === products.find((p) => p.SKU == SKU).category && p.SKU !== SKU);
   }
     
   res.render('products', { filteredProducts: recommendedProducts , title:'Product recommendations List' });
